@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interactive Kanban Board</title>
+  <style>
+  body { font-family: Arial, sans-serif; background: #0078d4; margin: 0; }
+    h2 { text-align: center; }
+    .board { display: flex; justify-content: space-between; padding: 20px; gap: 10px; }
+    .column {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      flex: 1;
+      padding: 10px;
+      min-width: 200px;
+      display: flex;
+      flex-direction: column;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .column h3 { margin-top: 0; }
+    .task {
+      background: #e3e7ea;
+      margin: 8px 0;
+      padding: 8px;
+      border-radius: 6px;
+      cursor: grab;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .add-task {
+      display: flex;
+      margin-bottom: 10px;
+    }
+    .add-task input {
+      flex: 1;
+      padding: 6px;
+      border-radius: 4px 0 0 4px;
+      border: 1px solid #ccc;
+      outline: none;
+    }
+    .add-task button {
+      padding: 6px 12px;
+      border: none;
+      background: #0078d4;
+      color: #fff;
+      border-radius: 0 4px 4px 0;
+      cursor: pointer;
+    }
+    .add-task button:hover { background: #005fa3; }
+    .column.drag-over { background: #d0e7ff; }
+  </style>
+</head>
+<body>
+  <div style="display: flex; align-items: center; justify-content: center; margin-top: 20px;">
+    <button id="loadBtn" style="margin-right: 8px; padding: 8px 16px; font-size: 16px;">Load</button>
+    <button id="saveBtn" style="margin-right: 16px; padding: 8px 16px; font-size: 16px;">Save</button>
+    <h2 style="margin: 0;">Kanban Board</h2>
+    <input type="file" id="fileInput" accept=".csv" style="display:none" />
+  </div>
+  <div class="board">
+    <div class="column" id="todo">
+      <h3>To Do</h3>
+      <div class="add-task">
+        <input type="text" id="todo-input" placeholder="Add a task...">
+        <button onclick="addTask('todo')">Add</button>
+      </div>
+      <div class="tasks"></div>
+    </div>
+    <div class="column" id="inprogress">
+      <h3>In Progress</h3>
+      <div class="add-task">
+        <input type="text" id="inprogress-input" placeholder="Add a task...">
+        <button onclick="addTask('inprogress')">Add</button>
+      </div>
+      <div class="tasks"></div>
+    </div>
+    <div class="column" id="review">
+      <h3>Review</h3>
+      <div class="add-task">
+        <input type="text" id="review-input" placeholder="Add a task...">
+        <button onclick="addTask('review')">Add</button>
+      </div>
+      <div class="tasks"></div>
+    </div>
+    <div class="column" id="done">
+      <h3>Done</h3>
+      <div class="add-task">
+        <input type="text" id="done-input" placeholder="Add a task...">
+        <button onclick="addTask('done')">Add</button>
+      </div>
+      <div class="tasks"></div>
+    </div>
+  </div>
+  <script>
+    document.getElementById('loadBtn').onclick = function() {
+      document.getElementById('fileInput').click();
+    };
+
+    document.getElementById('fileInput').onchange = function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const text = evt.target.result;
+        loadKanbanFromCSV(text);
+      };
+      reader.readAsText(file);
+    };
+
+    function loadKanbanFromCSV(csvText) {
+      // Remove all current tasks
+      ['todo','inprogress','review','done'].forEach(col => {
+        const tasksDiv = document.querySelector('#' + col + ' .tasks');
+        while (tasksDiv.firstChild) tasksDiv.removeChild(tasksDiv.firstChild);
+      });
+      // Parse CSV
+      const rows = csvText.split(/\r?\n/).map(r => r.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(cell => cell.replace(/^"|"$/g, '').replace(/""/g, '"')));
+      if (rows.length < 2) return;
+      // Find column indices
+      const header = rows[0].map(h => h.trim().toLowerCase());
+      const colMap = {
+        todo: header.findIndex(h => h === 'to do'),
+        inprogress: header.findIndex(h => h === 'in progress'),
+        review: header.findIndex(h => h === 'review'),
+        done: header.findIndex(h => h === 'done')
+      };
+      for (let i = 1; i < rows.length; i++) {
+        for (const col in colMap) {
+          const idx = colMap[col];
+          if (idx >= 0 && rows[i][idx] && rows[i][idx].trim() !== '') {
+            addTask(col, rows[i][idx]);
+          }
+        }
+      }
+    }
+    document.getElementById('saveBtn').onclick = function() {
+      const columns = ['todo', 'inprogress', 'review', 'done'];
+      const colLabels = columns.map(columnName);
+      // Gather tasks for each column
+      const tasksByCol = columns.map(col => {
+        return Array.from(document.querySelectorAll('#' + col + ' .task')).map(task => {
+          return task.querySelector('span') ? task.querySelector('span').textContent : task.textContent;
+        });
+      });
+      // Find the max number of tasks in any column
+      const maxRows = Math.max(...tasksByCol.map(arr => arr.length));
+      // Build rows: each row is a set of tasks from each column
+      let rows = [colLabels];
+      for (let i = 0; i < maxRows; i++) {
+        rows.push(tasksByCol.map(arr => arr[i] || ''));
+      }
+      const csv = rows.map(r => r.map(v => '"' + v.replace(/"/g,'""') + '"').join(',')).join('\r\n');
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth()+1).padStart(2,'0');
+      const dd = String(today.getDate()).padStart(2,'0');
+      const filename = `kanban-${yyyy}-${mm}-${dd}.csv`;
+      const blob = new Blob([csv], {type: 'text/csv'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    };
+    function addTask(columnId, text) {
+      if (typeof text === 'undefined') {
+        const input = document.getElementById(columnId + '-input');
+        text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+      }
+      const task = document.createElement('div');
+      task.className = 'task';
+      task.draggable = true;
+
+      // Task text span
+      const span = document.createElement('span');
+      span.textContent = text;
+      task.appendChild(span);
+
+      // Always show move dropdown
+      showMoveDropdown(task, columnId);
+
+      task.addEventListener('dragstart', dragStart);
+      task.addEventListener('dragend', dragEnd);
+      document.querySelector('#' + columnId + ' .tasks').appendChild(task);
+    }
+    function showMoveDropdown(task, currentColumnId) {
+      // Remove any existing dropdowns
+      const existing = task.querySelector('.move-dropdown');
+      if (existing) existing.remove();
+
+      const columns = ['todo', 'inprogress', 'review', 'done'];
+      const otherColumns = columns.filter(col => col !== currentColumnId);
+      const select = document.createElement('select');
+      select.className = 'move-dropdown';
+      select.style.marginLeft = '8px';
+      select.innerHTML = '<option value="">Move to...</option>' +
+        otherColumns.map(col => `<option value="${col}">${columnName(col)}</option>`).join('');
+
+      select.onchange = function() {
+        if (select.value) {
+          document.querySelector('#' + select.value + ' .tasks').appendChild(task);
+          select.remove();
+          // After moving, show a new dropdown for the new column
+          showMoveDropdown(task, select.value);
+        }
+      };
+      task.appendChild(select);
+    }
+
+    function columnName(id) {
+      switch(id) {
+        case 'todo': return 'To Do';
+        case 'inprogress': return 'In Progress';
+        case 'review': return 'Review';
+        case 'done': return 'Done';
+        default: return id;
+      }
+    }
+    let draggedTask = null;
+
+    function dragStart(e) {
+      draggedTask = this;
+      setTimeout(() => {
+        this.style.display = 'none';
+      }, 0);
+    }
+
+    function dragEnd(e) {
+      if (draggedTask) draggedTask.style.display = '';
+      draggedTask = null;
+    }
+
+    document.querySelectorAll('.tasks').forEach(tasks => {
+      tasks.addEventListener('dragover', function(e) {
+        e.preventDefault();
+      });
+      tasks.addEventListener('dragenter', function(e) {
+        e.preventDefault();
+        this.parentElement.classList.add('drag-over');
+      });
+      tasks.addEventListener('dragleave', function(e) {
+        this.parentElement.classList.remove('drag-over');
+      });
+      tasks.addEventListener('drop', function(e) {
+        this.parentElement.classList.remove('drag-over');
+        if (draggedTask) {
+          this.appendChild(draggedTask);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
