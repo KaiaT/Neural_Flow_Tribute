@@ -1,5 +1,11 @@
 # copilot learning diary 2025_07_26.md
-in C:\Users\kaiaj\OneDrive\Documents
+
+## Warnings
+- this is meant to jog my memory
+- this is not yet in a format that is easy to read
+	+ there are tangents
+	+ some of the dead end paths can just be ignored
+
 ## focused work
 - [x] 0 min 7/26 morning
 - [x] start a Neural_Flow_Tribute github project (to gather summaries/prep material for presentation) https://github.com/KaiaT/Neural_Flow_Tribute/edit/main/README.md
